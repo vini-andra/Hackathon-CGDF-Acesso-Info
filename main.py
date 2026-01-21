@@ -22,6 +22,7 @@ import os
 from pathlib import Path
 from typing import List, Dict, Optional, Tuple
 import json
+import pandas as pd
 
 # Adiciona o diretório src ao path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -185,8 +186,6 @@ def carregar_labels(caminho: str) -> Dict[any, bool]:
     O arquivo deve ter formato CSV com colunas: ID,Label
     Onde Label é 1 (contém dados pessoais) ou 0 (não contém).
     """
-    import pandas as pd
-    
     df = pd.read_csv(caminho)
     
     # Detecta colunas

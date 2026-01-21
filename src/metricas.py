@@ -8,6 +8,7 @@ Calcula métricas de desempenho: VP, VN, FP, FN, Precisão, Recall, F1
 from dataclasses import dataclass, field
 from typing import List, Dict, Optional, Tuple, Any
 import json
+import math
 from datetime import datetime
 
 
@@ -133,7 +134,6 @@ class MetricasDesempenho:
         denominador = 1 + z**2 / total
         centro = (p + z**2 / (2 * total)) / denominador
         
-        import math
         margem = z * math.sqrt((p * (1 - p) + z**2 / (4 * total)) / total) / denominador
         
         return (max(0, centro - margem), min(1, centro + margem))

@@ -134,7 +134,7 @@ class DetectorCPF(DetectorBase):
         invalidos = [
             '00000000000', '11111111111', '22222222222', '33333333333',
             '44444444444', '55555555555', '66666666666', '77777777777',
-            '88888888888', '99999999999', '12345678909', '01234567890'
+            '88888888888', '99999999999', '01234567890'
         ]
         return digitos in invalidos
     
@@ -335,6 +335,10 @@ class DetectorTelefone(DetectorBase):
                 if len(digitos) < 8 or len(digitos) > 13:
                     continue
                 
+                # Ignora sequências inválidas (repetições, padrões de CPF)
+                if self._eh_sequencia_invalida(digitos):
+                    continue
+                
                 confianca = confianca_base
                 pos_inicio = match.start()
                 
@@ -373,6 +377,32 @@ class DetectorTelefone(DetectorBase):
                     ))
         
         return self._remover_duplicatas(deteccoes)
+    
+    def _eh_sequencia_invalida(self, digitos: str) -> bool:
+        """Verifica se é uma sequência inválida (não é telefone real)."""
+        # Sequências repetidas
+        if len(set(digitos)) == 1:
+            return True
+        
+        # Padrões que provavelmente são CPF (11 dígitos que passam na validação)
+        if len(digitos) == 11:
+            # Verifica se é CPF válido
+            try:
+                soma = sum(int(digitos[i]) * (10 - i) for i in range(9))
+                resto = (soma * 10) % 11
+                digito1 = resto if resto < 10 else 0
+                
+                if digito1 == int(digitos[9]):
+                    soma = sum(int(digitos[i]) * (11 - i) for i in range(10))
+                    resto = (soma * 10) % 11
+                    digito2 = resto if resto < 10 else 0
+                    
+                    if digito2 == int(digitos[10]):
+                        return True  # É um CPF válido, não telefone
+            except (ValueError, IndexError):
+                pass
+        
+        return False
     
     def _remover_duplicatas(self, deteccoes: List[DeteccaoEncontrada]) -> List[DeteccaoEncontrada]:
         if not deteccoes:
@@ -486,8 +516,8 @@ class DetectorNome(DetectorBase):
         # Conectivos de nomes
         self.conectivos = {'de', 'da', 'do', 'das', 'dos', 'e', 'di', 'del'}
         
-        # Padrão para nomes próprios
-        self.padrao_nome = r'\b([A-ZÁÉÍÓÚÂÊÔÃÕÇ][a-záéíóúâêôãõç]+(?:\s+(?:de|da|do|dos|das|e|di|del)\s+)?(?:[A-ZÁÉÍÓÚÂÊÔÃÕÇ][a-záéíóúâêôãõç]+\s*){1,5})\b'
+        # Padrão para nomes próprios - captura Nome Sobrenome com ou sem conectivos
+        self.padrao_nome = r'\b([A-ZÁÉÍÓÚÂÊÔÃÕÇ][a-záéíóúâêôãõç]+(?:\s+(?:de|da|do|dos|das|e|di|del|[A-ZÁÉÍÓÚÂÊÔÃÕÇ][a-záéíóúâêôãõç]+))+)\b'
         
         # Contextos que indicam nomes
         self.contextos_positivos = [
@@ -511,62 +541,37 @@ class DetectorNome(DetectorBase):
         }
     
     def _carregar_nomes_base(self) -> Set[str]:
-        """Carrega lista base de nomes brasileiros comuns."""
-        nomes = {
-            # Masculinos mais comuns
-            'jose', 'joao', 'antonio', 'francisco', 'carlos', 'paulo', 'pedro',
-            'lucas', 'luiz', 'marcos', 'luis', 'gabriel', 'rafael', 'daniel',
-            'marcelo', 'bruno', 'eduardo', 'felipe', 'raimundo', 'rodrigo',
-            'manoel', 'sebastiao', 'jorge', 'fernando', 'andre', 'fabio',
-            'marcio', 'geraldo', 'alexandre', 'ricardo', 'mario', 'sergio',
-            'claudio', 'jose', 'gilberto', 'roberto', 'ademir', 'ademar',
-            'adilson', 'adriano', 'agnaldo', 'ailton', 'alan', 'alberto',
-            'alex', 'alexandre', 'amauri', 'anderson', 'andre', 'angelo',
-            # Femininos mais comuns
-            'maria', 'ana', 'francisca', 'antonia', 'adriana', 'juliana',
-            'marcia', 'fernanda', 'patricia', 'aline', 'sandra', 'camila',
-            'amanda', 'bruna', 'jessica', 'leticia', 'julia', 'luciana',
-            'vanessa', 'mariana', 'gabriela', 'beatriz', 'larissa', 'renata',
-            'fabiana', 'cristiane', 'simone', 'carla', 'rosa', 'rita',
-            'lucia', 'celia', 'marlene', 'vera', 'tereza', 'terezinha',
-            'angela', 'neide', 'rosangela', 'lourdes', 'fatima', 'marta',
-            'helena', 'regina', 'sonia', 'valdete', 'zelia', 'eliana',
-            'eliane', 'elisabete', 'elizabeth', 'eva', 'glaucia', 'gloria',
-            'iara', 'ines', 'irene', 'isabel', 'ivone', 'jacira',
-            'jaqueline', 'joana', 'josefa', 'josiane', 'jucelia', 'jussara',
-            'katia', 'keila', 'kelly', 'lara', 'laura', 'leila',
-            'lidia', 'lilian', 'luiza', 'magda', 'margarida', 'marli',
-            'madalena', 'miriam', 'monica', 'nadia', 'neusa', 'odete',
-            'paula', 'priscila', 'raquel', 'rosana', 'roseli', 'rosilene',
-            'silvia', 'solange', 'sueli', 'tania', 'tatiana', 'valeria',
-            'vania', 'viviane', 'zenaide', 'zilma', 'zuleide'
-        }
+        """Carrega lista de nomes do arquivo JSON."""
+        import json
+        import os
+        
+        nomes = set()
+        arquivo_json = os.path.join(os.path.dirname(__file__), '..', 'dados', 'nomes_proprios.json')
+        
+        if os.path.exists(arquivo_json):
+            try:
+                with open(arquivo_json, 'r', encoding='utf-8') as f:
+                    nomes = set(json.load(f))
+            except (json.JSONDecodeError, IOError):
+                pass
+        
         return nomes
     
     def _carregar_sobrenomes_base(self) -> Set[str]:
-        """Carrega lista base de sobrenomes brasileiros."""
-        sobrenomes = {
-            'silva', 'santos', 'oliveira', 'souza', 'rodrigues', 'ferreira',
-            'alves', 'pereira', 'lima', 'gomes', 'costa', 'ribeiro',
-            'martins', 'carvalho', 'almeida', 'lopes', 'soares', 'fernandes',
-            'vieira', 'barbosa', 'rocha', 'dias', 'nascimento', 'andrade',
-            'moreira', 'nunes', 'marques', 'machado', 'mendes', 'freitas',
-            'cardoso', 'ramos', 'goncalves', 'santana', 'teixeira', 'araujo',
-            'reis', 'moura', 'pinto', 'correia', 'campos', 'miranda',
-            'melo', 'borges', 'azevedo', 'cunha', 'batista', 'matos',
-            'viana', 'nogueira', 'coelho', 'pires', 'brito', 'tavares',
-            'monteiro', 'cavalcante', 'fonseca', 'farias', 'antunes', 'bezerra',
-            'macedo', 'figueiredo', 'aguiar', 'siqueira', 'guimaraes', 'leal',
-            'abreu', 'amaral', 'assis', 'assumpcao', 'bastos', 'braga',
-            'brandao', 'cabral', 'camargo', 'cardoso', 'carneiro', 'cerqueira',
-            'chaves', 'correia', 'domingues', 'duarte', 'esteves', 'evangelista',
-            'faria', 'fontes', 'franca', 'franco', 'freire', 'garcia',
-            'henrique', 'leite', 'luz', 'magalhaes', 'malta', 'medeiros',
-            'menezes', 'mesquita', 'neto', 'pacheco', 'paiva', 'paixao',
-            'passos', 'penha', 'pessoa', 'queiroz', 'resende', 'rosa',
-            'sales', 'sampaio', 'santiago', 'silveira', 'simoes', 'sena',
-            'toledo', 'torres', 'trindade', 'vargas', 'vasconcelos', 'xavier'
-        }
+        """Carrega lista de sobrenomes do arquivo JSON."""
+        import json
+        import os
+        
+        sobrenomes = set()
+        arquivo_json = os.path.join(os.path.dirname(__file__), '..', 'dados', 'sobrenomes.json')
+        
+        if os.path.exists(arquivo_json):
+            try:
+                with open(arquivo_json, 'r', encoding='utf-8') as f:
+                    sobrenomes = set(json.load(f))
+            except (json.JSONDecodeError, IOError):
+                pass
+        
         return sobrenomes
     
     def detectar(self, texto: str) -> List[DeteccaoEncontrada]:
@@ -602,13 +607,17 @@ class DetectorNome(DetectorBase):
             # Calcula confiança
             confianca = 0.50
             
+            # Normaliza para comparação (remove acentos)
+            primeiro_nome_norm = self._normalizar_texto(primeiro_nome)
+            
             # Aumenta se primeiro nome é conhecido
-            if primeiro_nome in self.nomes_proprios:
+            if primeiro_nome_norm in self.nomes_proprios or primeiro_nome in self.nomes_proprios:
                 confianca += 0.25
             
             # Aumenta se último nome é sobrenome conhecido
             ultimo_nome = palavras_significativas[-1].lower()
-            if ultimo_nome in self.sobrenomes:
+            ultimo_nome_norm = self._normalizar_texto(ultimo_nome)
+            if ultimo_nome_norm in self.sobrenomes or ultimo_nome in self.sobrenomes:
                 confianca += 0.20
             
             # Verifica contexto
@@ -639,6 +648,14 @@ class DetectorNome(DetectorBase):
                 ))
         
         return self._remover_duplicatas(deteccoes)
+    
+    def _normalizar_texto(self, texto: str) -> str:
+        """Remove acentos para normalização na comparação."""
+        import unicodedata
+        # Normaliza para forma NFD (decomposta) e remove marcas de acento
+        texto_norm = unicodedata.normalize('NFD', texto)
+        texto_sem_acento = ''.join(c for c in texto_norm if unicodedata.category(c) != 'Mn')
+        return texto_sem_acento.lower()
     
     def _remover_duplicatas(self, deteccoes: List[DeteccaoEncontrada]) -> List[DeteccaoEncontrada]:
         if not deteccoes:

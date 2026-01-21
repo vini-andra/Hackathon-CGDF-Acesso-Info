@@ -381,6 +381,9 @@ Este software foi desenvolvido para o 1º Hackathon em Controle Social do Distri
 
 Desenvolvido por participante(s) do Hackathon Participa DF - Janeiro/2026.
 
+Vinicius Armando Menezes de Andrade
+Joao Luiz de Jesus Amaro
+
 ---
 
 ## 📧 Contato
