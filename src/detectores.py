@@ -745,6 +745,231 @@ class DetectorEndereco(DetectorBase):
         return deteccoes
 
 
+class DetectorProcesso(DetectorBase):
+    """
+    Detector de Números de Processo, Protocolo e Ocorrências.
+    
+    Identifica:
+    - Processos SEI: 00000-00000000/2024-00
+    - Protocolos: 0000000000/2024
+    - Ocorrências policiais: 16+ dígitos
+    - CDAs e números administrativos
+    """
+    
+    def __init__(self, sensibilidade: float = 0.70):
+        super().__init__("PROCESSO", sensibilidade)
+        
+        self.padroes = [
+            # Processo SEI completo: 00000-00000000/2024-00
+            (r'\b(\d{5})-?(\d{8})/(\d{4})-(\d{2})\b', 'SEI', 0.95),
+            
+            # Processo SEI alternativo: 0000000000/2024-00
+            (r'\b(\d{10,13})/(\d{4})-(\d{2})\b', 'SEI', 0.90),
+            
+            # Protocolo simples: 0000000000/2024
+            (r'\b(\d{8,13})/(\d{4})\b', 'PROTOCOLO', 0.85),
+            
+            # Ocorrência policial (PMDF, PCDF): 16 dígitos
+            (r'\b(\d{16})\b', 'OCORRENCIA', 0.80),
+            
+            # CDA ou número administrativo: 10 dígitos isolados
+            (r'\b(\d{10})\b', 'CDA', 0.60),
+        ]
+        
+        self.contextos_positivos = [
+            r'processo[s]?[\s:]*n?[úu]?m?e?r?o?[\s:]*',
+            r'protocolo[\s:]*',
+            r'sei[\s:]*',
+            r'ocorr[êe]ncia[\s:]*',
+            r'n[úu]mero[\s:]*',
+            r'cda[\s:]*',
+            r'solicito[\s\w]*processo',
+            r'acesso[\s\w]*processo',
+        ]
+        
+        # Contextos que reduzem confiança (falsos positivos)
+        self.contextos_negativos = [
+            r'cpf', r'cnpj', r'telefone', r'fone', r'cep',
+            r'ano[\s:]*', r'data[\s:]*'
+        ]
+    
+    def detectar(self, texto: str) -> List[DeteccaoEncontrada]:
+        deteccoes = []
+        texto_lower = texto.lower()
+        
+        for padrao, subtipo, confianca_base in self.padroes:
+            for match in re.finditer(padrao, texto, re.IGNORECASE):
+                valor = match.group(0)
+                confianca = confianca_base
+                
+                # Verifica contexto positivo
+                pos_inicio = match.start()
+                trecho_antes = texto_lower[max(0, pos_inicio-50):pos_inicio]
+                trecho_depois = texto_lower[match.end():min(len(texto), match.end()+30)]
+                trecho_contexto = trecho_antes + " " + trecho_depois
+                
+                for ctx in self.contextos_positivos:
+                    if re.search(ctx, trecho_contexto):
+                        confianca = min(1.0, confianca + 0.15)
+                        break
+                
+                # Verifica contexto negativo
+                for ctx in self.contextos_negativos:
+                    if re.search(ctx, trecho_contexto):
+                        confianca = max(0.2, confianca - 0.30)
+                        break
+                
+                # Para CDA (10 dígitos), exige contexto mais forte
+                if subtipo == 'CDA' and confianca < 0.75:
+                    # Só aceita se tiver contexto explícito
+                    tem_contexto = any(
+                        re.search(ctx, trecho_contexto) 
+                        for ctx in self.contextos_positivos
+                    )
+                    if not tem_contexto:
+                        continue
+                
+                if confianca >= self.sensibilidade:
+                    deteccoes.append(DeteccaoEncontrada(
+                        tipo=f"PROCESSO_{subtipo}",
+                        valor=valor,
+                        posicao_inicio=match.start(),
+                        posicao_fim=match.end(),
+                        confianca=round(confianca, 3),
+                        contexto=self.extrair_contexto(texto, match.start(), match.end()),
+                        validado=subtipo in ['SEI', 'PROTOCOLO'],
+                        metodo_deteccao="regex+contexto"
+                    ))
+        
+        return self._remover_duplicatas(deteccoes)
+    
+    def _remover_duplicatas(self, deteccoes: List[DeteccaoEncontrada]) -> List[DeteccaoEncontrada]:
+        if not deteccoes:
+            return []
+        
+        deteccoes.sort(key=lambda x: (-x.confianca, x.posicao_inicio))
+        resultado = []
+        posicoes_usadas = set()
+        
+        for d in deteccoes:
+            pos_range = range(d.posicao_inicio, d.posicao_fim)
+            if not any(p in posicoes_usadas for p in pos_range):
+                resultado.append(d)
+                posicoes_usadas.update(pos_range)
+        
+        return resultado
+
+
+class DetectorContexto(DetectorBase):
+    """
+    Detector baseado em Contexto e Palavras-chave.
+    
+    Identifica situações onde o texto em si é sensível, mesmo sem
+    conter um dado estruturado explícito (ex: revelação de saúde,
+    vulnerabilidade social, dados de menores).
+    """
+    
+    def __init__(self, sensibilidade: float = 0.65):
+        super().__init__("CONTEXTO", sensibilidade)
+        
+        self.padroes = [
+            # Saúde e condições médicas
+            (r'\b(laudo|atestada?o|exame|diagn[óo]stico|tratamento|cirurgia|interna[çc][ãa]o)\b', 'SAUDE', 0.85),
+            (r'\b(c[âa]ncer|tumor|doen[çc]a|autismo|tea|defici[êe]ncia|hiv|aids|gravidez|gestante)\b', 'SAUDE', 0.90),
+            (r'\b(psic[óo]log[oa]|psiquiatra|terapia|medicamento|rem[ée]dio|receita m[ée]dica)\b', 'SAUDE', 0.80),
+            
+            # Vulnerabilidade e Social
+            (r'\b(bolsa fam[íi]lia|aux[íi]lio|benef[íi]cio|renda|vulnerabilidade|risco social)\b', 'SOCIAL', 0.75),
+            (r'\b(medida protetiva|viol[êe]ncia|abuso|agress[ãa]o|boletim de ocorr[êe]ncia)\b', 'SENSIVEL', 0.90),
+            (r'\b(menor de idade|crian[çc]a|adolescente|tutelad[oa]|adotad[oa])\b', 'MENOR', 0.85),
+            
+            # Documentos e Identificação (solicitação implícita)
+            (r'\b(identidade|rg|carteira|documento|habilita[çc][ãa]o|cnh)\b', 'DOC_IMPLICITO', 0.70),
+            (r'\b(meu cadastro|atualizar cadastro|fazer cadastro|meus dados)\b', 'CADASTRO', 0.75),
+            
+            # Administrativo Pessoal
+            (r'\b(processo disciplinar|sindic[âa]ncia|pad|punido|advert[êe]ncia|demiss[ãa]o)\b', 'ADM_SENSIVEL', 0.85),
+            (r'\b(aposentadoria|pens[ãa]o|folha de pagamento|contracheque|holerite)\b', 'FINANCEIRO', 0.80),
+        ]
+        
+        self.contextos_positivos = [
+            r'meu', r'minha', r'solicito', r'requerimento', r'cópia',
+            r'acesso', r'enviar', r'encaminhar', r'me cadastrar'
+        ]
+        
+        # Contextos que indicam generalidade (reduz chance de ser pessoal)
+        self.contextos_negativos = [
+            r'estat[íi]stica', r'quantitativo', r'quantos', r'total',
+            r'dados gerais', r'levantamento', r'número de', r'lista de',
+            r'todos os', r'quaisquer'
+        ]
+    
+    def detectar(self, texto: str) -> List[DeteccaoEncontrada]:
+        deteccoes = []
+        texto_lower = texto.lower()
+        
+        for padrao, subtipo, confianca_base in self.padroes:
+            for match in re.finditer(padrao, texto, re.IGNORECASE):
+                valor = match.group(0)
+                confianca = confianca_base
+                
+                # Verifica contexto pessoal (aumenta confiança)
+                pos_inicio = match.start()
+                trecho_antes = texto_lower[max(0, pos_inicio-50):pos_inicio]
+                
+                eh_pessoal = False
+                for ctx in self.contextos_positivos:
+                    if re.search(ctx, trecho_antes):
+                        confianca = min(1.0, confianca + 0.15)
+                        eh_pessoal = True
+                        break
+                
+                # Verifica contexto genérico (reduz confiança)
+                # Exceção: Se for SAUDE ou SENSIVEL, mantém alta mesmo se parecer genérico,
+                # pois estatísticas de saúde detalhadas podem ser sensíveis
+                eh_generico = False
+                if subtipo not in ['SAUDE', 'SENSIVEL']:
+                    for ctx in self.contextos_negativos:
+                        if re.search(ctx, trecho_antes):
+                            confianca = max(0.2, confianca - 0.40)
+                            eh_generico = True
+                            break
+                
+                # Para termos muito comuns (ex: documento), exige contexto pessoal
+                if subtipo == 'DOC_IMPLICITO' and not eh_pessoal:
+                    continue
+                    
+                if confianca >= self.sensibilidade:
+                    deteccoes.append(DeteccaoEncontrada(
+                        tipo=f"CONTEXTO_{subtipo}",
+                        valor=valor,
+                        posicao_inicio=match.start(),
+                        posicao_fim=match.end(),
+                        confianca=round(confianca, 3),
+                        contexto=self.extrair_contexto(texto, match.start(), match.end()),
+                        validado=eh_pessoal,
+                        metodo_deteccao="palavra_chave"
+                    ))
+        
+        return self._remover_duplicatas(deteccoes)
+    
+    def _remover_duplicatas(self, deteccoes: List[DeteccaoEncontrada]) -> List[DeteccaoEncontrada]:
+        if not deteccoes:
+            return []
+        
+        deteccoes.sort(key=lambda x: (-x.confianca, x.posicao_inicio))
+        resultado = []
+        posicoes_usadas = set()
+        
+        for d in deteccoes:
+            pos_range = range(d.posicao_inicio, d.posicao_fim)
+            if not any(p in posicoes_usadas for p in pos_range):
+                resultado.append(d)
+                posicoes_usadas.update(pos_range)
+        
+        return resultado
+
+
 class SistemaDeteccaoIntegrado:
     """
     Sistema integrado que combina todos os detectores.
@@ -770,6 +995,8 @@ class SistemaDeteccaoIntegrado:
             'EMAIL': DetectorEmail(config.get('email_sensibilidade', 0.85)),
             'NOME': DetectorNome(config.get('nome_sensibilidade', 0.70)),
             'ENDERECO': DetectorEndereco(config.get('endereco_sensibilidade', 0.80)),
+            'PROCESSO': DetectorProcesso(config.get('processo_sensibilidade', 0.70)),
+            'CONTEXTO': DetectorContexto(config.get('contexto_sensibilidade', 0.65)),
         }
         
         self.tipos_ativos = set(self.detectores.keys())

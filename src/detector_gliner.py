@@ -85,23 +85,34 @@ class DetectorGLiNER:
     
     # Labels prioritários para detecção de PII brasileiro
     LABELS_PII_BR = [
+        # Identificação pessoal
         "person",
         "cpf",
         "cnpj",
+        "identity card number",
+        "driver's license number",
+        "date of birth",
+        
+        # Contato
         "phone number",
         "mobile phone number",
         "email",
         "email address",
         "address",
         "postal code",
-        "date of birth",
-        "identity card number",
-        "driver's license number",
+        
+        # Dados financeiros
         "credit card number",
         "bank account number",
+        
+        # Dados de saúde (LGPD Art. 5º, II - dados sensíveis)
+        "medical condition",
+        "medication",
+        "health insurance number",
+        "blood type",
     ]
     
-    def __init__(self, threshold: float = 0.5, device: str = None):
+    def __init__(self, threshold: float = 0.3, device: str = None):
         """
         Inicializa o detector GLiNER.
         
