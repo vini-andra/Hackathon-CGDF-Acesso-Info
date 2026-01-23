@@ -1,0 +1,32 @@
+# Ambiente Virtual
+venv/
+env/
+.env
+
+# Python Cache e Compilados
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribuição
+dist/
+build/
+*.egg-info/
+
+# Arquivos de Dados e Saída (Opcional - mas recomendado não commitar dados grandes)
+# dados/
+output/
+*.csv
+*.xlsx
+*.xls
+*.json
+!dados/nomes_proprios.json
+!dados/sobrenomes.json
+
+# IDEs e Editores
+.vscode/
+.idea/
+*.swp
+
+# Logs
+*.log
