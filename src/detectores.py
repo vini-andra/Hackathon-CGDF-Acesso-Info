@@ -750,14 +750,16 @@ class SistemaDeteccaoIntegrado:
     Sistema integrado que combina todos os detectores.
     
     Coordena a execução de múltiplos detectores e consolida resultados.
+    Suporta modo híbrido: GLiNER (ML) + Regex para máxima precisão.
     """
     
-    def __init__(self, config: Optional[Dict] = None):
+    def __init__(self, config: Optional[Dict] = None, usar_gliner: bool = True):
         """
         Inicializa o sistema com configuração opcional.
         
         Args:
             config: Dicionário com configurações de sensibilidade por tipo.
+            usar_gliner: Se True, usa GLiNER para detecção adicional (requer instalação).
         """
         config = config or {}
         
@@ -771,6 +773,36 @@ class SistemaDeteccaoIntegrado:
         }
         
         self.tipos_ativos = set(self.detectores.keys())
+        
+        # Configuração do GLiNER
+        self.usar_gliner = usar_gliner
+        self.gliner_threshold = config.get('gliner_threshold', 0.5)
+        self._detector_gliner = None
+        self._gliner_disponivel = None
+    
+    @property
+    def detector_gliner(self):
+        """Lazy loading do detector GLiNER."""
+        if self._detector_gliner is None and self.usar_gliner:
+            try:
+                from .detector_gliner import DetectorGLiNER
+                self._detector_gliner = DetectorGLiNER(threshold=self.gliner_threshold)
+                self._gliner_disponivel = True
+            except ImportError:
+                self._gliner_disponivel = False
+                print("Aviso: GLiNER não disponível. Usando apenas detecção por regex.")
+        return self._detector_gliner
+    
+    @property
+    def gliner_disponivel(self) -> bool:
+        """Verifica se o GLiNER está disponível."""
+        if self._gliner_disponivel is None:
+            try:
+                from .detector_gliner import DetectorGLiNER
+                self._gliner_disponivel = DetectorGLiNER().esta_disponivel()
+            except ImportError:
+                self._gliner_disponivel = False
+        return self._gliner_disponivel
     
     def configurar_tipos_ativos(self, tipos: List[str]):
         """Define quais tipos de dados devem ser detectados."""
@@ -780,6 +812,8 @@ class SistemaDeteccaoIntegrado:
         """
         Analisa um texto e retorna todas as detecções.
         
+        Usa abordagem híbrida: GLiNER (ML) + Regex para máxima cobertura e precisão.
+        
         Args:
             texto: Texto a ser analisado.
             
@@ -788,15 +822,63 @@ class SistemaDeteccaoIntegrado:
         """
         todas_deteccoes = []
         
+        # 1. Detecção por Regex (sempre executado)
         for tipo, detector in self.detectores.items():
             if tipo in self.tipos_ativos:
                 deteccoes = detector.detectar(texto)
                 todas_deteccoes.extend(deteccoes)
         
+        # 2. Detecção por GLiNER (se disponível e habilitado)
+        if self.usar_gliner and self.detector_gliner is not None:
+            try:
+                deteccoes_gliner = self.detector_gliner.detectar(texto)
+                
+                for dg in deteccoes_gliner:
+                    # Verifica se já existe detecção similar (pelo valor e posição)
+                    ja_detectado = False
+                    for td in todas_deteccoes:
+                        # Considera duplicata se há sobreposição significativa
+                        if self._deteccoes_sobrepostas(td, dg):
+                            # Mantém a de maior confiança, atualiza se GLiNER for melhor
+                            if dg.confianca > td.confianca:
+                                td.metodo_deteccao = f"hibrido({td.metodo_deteccao}+gliner)"
+                            ja_detectado = True
+                            break
+                    
+                    if not ja_detectado:
+                        # Converte DeteccaoGLiNER para DeteccaoEncontrada
+                        nova_deteccao = DeteccaoEncontrada(
+                            tipo=dg.tipo,
+                            valor=dg.valor,
+                            posicao_inicio=dg.posicao_inicio,
+                            posicao_fim=dg.posicao_fim,
+                            confianca=dg.confianca,
+                            contexto=self._extrair_contexto(texto, dg.posicao_inicio, dg.posicao_fim),
+                            validado=False,
+                            metodo_deteccao="gliner"
+                        )
+                        todas_deteccoes.append(nova_deteccao)
+            except Exception as e:
+                # Falha silenciosa do GLiNER - regex já capturou
+                pass
+        
         # Ordena por posição no texto
         todas_deteccoes.sort(key=lambda x: x.posicao_inicio)
         
         return todas_deteccoes
+    
+    def _deteccoes_sobrepostas(self, d1, d2) -> bool:
+        """Verifica se duas detecções estão sobrepostas."""
+        # Considera sobreposição se há interseção de posições
+        inicio_max = max(d1.posicao_inicio, d2.posicao_inicio)
+        fim_min = min(d1.posicao_fim, d2.posicao_fim)
+        return inicio_max < fim_min
+    
+    def _extrair_contexto(self, texto: str, inicio: int, fim: int, janela: int = 50) -> str:
+        """Extrai o contexto ao redor de uma detecção."""
+        ctx_inicio = max(0, inicio - janela)
+        ctx_fim = min(len(texto), fim + janela)
+        return texto[ctx_inicio:ctx_fim]
     
     def contem_dados_pessoais(self, texto: str) -> bool:
         """Verifica se o texto contém algum dado pessoal."""

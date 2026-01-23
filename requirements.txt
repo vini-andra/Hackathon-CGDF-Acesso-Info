@@ -7,6 +7,10 @@ pandas>=1.5.0
 # Leitura de Excel
 openpyxl>=3.0.0
 
+# GLiNER - Detecção de PII por Machine Learning
+gliner>=0.2.0
+torch>=2.0.0
+
 # Opcional: métricas avançadas
 # scikit-learn>=1.0.0
 
