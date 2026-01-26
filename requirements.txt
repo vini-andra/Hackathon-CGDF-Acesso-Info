@@ -19,3 +19,4 @@ torch>=2.0.0
 
 # Opcional: validação de e-mail
 # email-validator>=1.3.0
+google-generativeai

@@ -57,8 +57,8 @@ def fazer_predicoes(arquivo_entrada: str, arquivo_saida: str,
         'endereco_sensibilidade': 0.80,
     }
     
-    # Inicializa sistema
-    sistema = SistemaDeteccaoIntegrado(config)
+    # Inicializa sistema (LLM auto-detecta API key)
+    sistema = SistemaDeteccaoIntegrado(config, usar_gliner=True)
     carregador = CarregadorDados(coluna_texto=coluna_texto)
     
     # Carrega dados

@@ -978,13 +978,14 @@ class SistemaDeteccaoIntegrado:
     Suporta modo híbrido: GLiNER (ML) + Regex para máxima precisão.
     """
     
-    def __init__(self, config: Optional[Dict] = None, usar_gliner: bool = True):
+    def __init__(self, config: Optional[Dict] = None, usar_gliner: bool = True, usar_llm: bool = None):
         """
         Inicializa o sistema com configuração opcional.
         
         Args:
             config: Dicionário com configurações de sensibilidade por tipo.
             usar_gliner: Se True, usa GLiNER para detecção adicional (requer instalação).
+            usar_llm: Se True, usa LLM (Gemini) para detecção subjetiva (requer API Key).
         """
         config = config or {}
         
@@ -1006,6 +1007,16 @@ class SistemaDeteccaoIntegrado:
         self.gliner_threshold = config.get('gliner_threshold', 0.5)
         self._detector_gliner = None
         self._gliner_disponivel = None
+
+        # Configuração do LLM (Gemini) - auto-detecta disponibilidade
+        if usar_llm is None:
+            # Auto-detecta: só habilita se API key estiver disponível
+            import os
+            usar_llm = bool(os.environ.get("GEMINI_API_KEY"))
+        
+        self.usar_llm = usar_llm
+        self._detector_llm = None
+        self._llm_disponivel = None
     
     @property
     def detector_gliner(self):
@@ -1030,6 +1041,32 @@ class SistemaDeteccaoIntegrado:
             except ImportError:
                 self._gliner_disponivel = False
         return self._gliner_disponivel
+    
+    @property
+    def detector_llm(self):
+        """Lazy loading do detector LLM."""
+        if self._detector_llm is None and self.usar_llm:
+            try:
+                from .detector_llm import DetectorLLM
+                self._detector_llm = DetectorLLM()
+                # Verifica se a API Key estava presente
+                if not self._detector_llm.esta_ativo():
+                    print("Aviso: Falha ao inicializar LLM (API Key ausente?).")
+                    self._llm_disponivel = False
+                else:
+                    self._llm_disponivel = True
+            except ImportError:
+                self._llm_disponivel = False
+                print("Aviso: Módulo detector_llm não encontrado.")
+        return self._detector_llm
+
+    @property
+    def llm_disponivel(self) -> bool:
+        """Verifica se o LLM está disponível."""
+        if self._llm_disponivel is None:
+            # Tenta carregar para verificar status
+            _ = self.detector_llm
+        return self._llm_disponivel is True
     
     def configurar_tipos_ativos(self, tipos: List[str]):
         """Define quais tipos de dados devem ser detectados."""
@@ -1087,6 +1124,29 @@ class SistemaDeteccaoIntegrado:
                         todas_deteccoes.append(nova_deteccao)
             except Exception as e:
                 # Falha silenciosa do GLiNER - regex já capturou
+                pass
+        
+        # 3. Detecção por LLM (APENAS SE NADA FOI ENCONTRADO - última camada)
+        if len(todas_deteccoes) == 0 and self.usar_llm and self.detector_llm is not None and self.detector_llm.esta_ativo():
+            try:
+                score_sensibilidade = self.detector_llm.avaliar_sensibilidade(texto)
+                
+                # Se o score for alto (> 0.7), adiciona uma detecção genérica
+                if score_sensibilidade >= 0.7:
+                    deteccao_llm = DeteccaoEncontrada(
+                        tipo="SUBJETIVO_LLM",
+                        valor="[Conteúdo sensível detectado por IA]",
+                        posicao_inicio=0,
+                        posicao_fim=len(texto),
+                        confianca=score_sensibilidade,
+                        contexto=texto[:200],  # Primeiros 200 chars como contexto
+                        validado=False,
+                        metodo_deteccao=f"llm-fallback-{self.detector_llm.modelo_nome}"
+                    )
+                    todas_deteccoes.append(deteccao_llm)
+                    
+            except Exception as e:
+                print(f"Erro na avaliação LLM: {e}")
                 pass
         
         # Ordena por posição no texto

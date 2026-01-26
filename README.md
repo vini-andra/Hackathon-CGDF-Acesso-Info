@@ -9,8 +9,17 @@
 
 Este sistema foi desenvolvido para identificar automaticamente **dados pessoais sensíveis** em pedidos de acesso à informação, utilizando uma abordagem **híbrida** que combina:
 
-- **GLiNER (Machine Learning)**: Modelo de NER especializado em PII para detecção contextual
 - **Regex + Validadores**: Validação estrutural de documentos brasileiros (CPF, RG, etc.)
+- **GLiNER (Machine Learning)**: Modelo de NER especializado em PII para detecção contextual
+- **LLM (Opcional)**: Gemini API como camada de fallback para casos subjetivos
+
+### ✨ Características Principais
+
+- ✅ **Funciona sem API**: Sistema independente de quotas ou chaves de API
+- ✅ **Alta Precisão**: Combina múltiplas técnicas de detecção
+- ✅ **Formato Padrão**: Saída CSV no formato `ID,Predicao` (0 ou 1)
+- ✅ **Multi-formato**: Suporta Excel, CSV, JSON, Parquet, etc.
+- ✅ **Auto-detecção**: Identifica automaticamente colunas de ID e texto
 
 ### Tipos de Dados Detectados
 
@@ -78,39 +87,97 @@ pip install -r requirements.txt
 
 ---
 
-## 📖 Uso
+## 📖 Como Usar
 
-### Script de Predição (Submissão)
+### Formato de Dados de Entrada
 
-```bash
-# Formato básico
-python predict.py <arquivo_entrada> <arquivo_saida>
+O sistema aceita diversos formatos de arquivo. O arquivo deve conter:
+- **Coluna ID**: Identificador único do registro
+- **Coluna de Texto**: Texto a ser analisado (detecta automaticamente colunas como "Texto", "Texto Mascarado", "Descrição", etc.)
 
-# Exemplo
-python predict.py dados_teste.xlsx predicoes.csv
+**Formatos suportados:**
+- Excel: `.xlsx`, `.xls`
+- CSV: `.csv`
+- TSV: `.tsv`
+- JSON: `.json`
+- Texto: `.txt`
+- Parquet: `.parquet`
+
+### Formato de Saída
+
+O sistema gera um arquivo CSV com o formato:
+
+```csv
+ID,Predicao
+1,0
+2,1
+3,0
 ```
 
-**Saída**: Arquivo CSV com colunas `ID,Predicao` onde:
-- `1` = Contém dados pessoais (NÃO público)
-- `0` = Não contém dados pessoais (público)
+Onde:
+- **`0`** = NÃO contém dados pessoais (pode ser público)
+- **`1`** = Contém dados pessoais (NÃO deve ser público)
+
+---
+
+### Script de Predição (Para Submissão)
+
+```bash
+# Uso básico
+python predict.py <arquivo_entrada> <arquivo_saida>
+
+# Exemplos
+python predict.py dados_teste.xlsx predicoes.csv
+python predict.py pedidos.csv resultado.csv
+
+# Especificando coluna de texto manualmente (opcional)
+python predict.py dados.xlsx saida.csv "Texto do Pedido"
+```
+
+**Importante:**
+- ✅ Funciona **mesmo sem API key do Gemini**
+- ✅ Auto-detecta colunas de ID e texto
+- ✅ Usa GLiNER (ML) + Regex para máxima precisão
+- ⚠️ Se tiver API key, usa LLM como fallback adicional
+
+---
+
+### Configuração Opcional da API (LLM)
+
+O sistema funciona perfeitamente **sem API**, mas você pode opcionalmente habilitar o LLM:
+
+```bash
+# Definir API key (opcional)
+export GEMINI_API_KEY='sua-chave-aqui'
+
+# Rodar normalmente
+python predict.py dados.xlsx saida.csv
+```
+
+**Nota:** O LLM só é usado como última camada de fallback quando regex e GLiNER não detectam nada.
+
+---
 
 ### Uso como Biblioteca Python
 
 ```python
 from src.detectores import SistemaDeteccaoIntegrado
 
-# Com GLiNER (padrão - requer GPU ou CPU potente)
-sistema = SistemaDeteccaoIntegrado(usar_gliner=True)
-
-# Sem GLiNER (apenas regex - mais leve)
-sistema = SistemaDeteccaoIntegrado(usar_gliner=False)
+# Inicialização padrão (auto-detecta API key)
+sistema = SistemaDeteccaoIntegrado()
 
 # Analisar texto
 texto = "Meu nome é João Silva, CPF 123.456.789-09"
 resultado = sistema.obter_resumo(texto)
 
-print(f"Contém dados pessoais: {resultado['contem_dados_pessoais']}")
-print(f"Detecções: {resultado['por_tipo']}")
+print(f"Contém dados: {resultado['contem_dados_pessoais']}")
+print(f"Tipos detectados: {resultado['por_tipo']}")
+
+# Verificação simples
+if sistema.contem_dados_pessoais(texto):
+    print("❌ NÃO publicar - contém dados pessoais")
+else:
+    print("✅ Pode publicar")
 ```
 
 ---
@@ -130,19 +197,24 @@ O sistema utiliza o modelo [`E3-JSI/gliner-multi-pii-domains-v1`](https://huggin
 
 ```
 ┌─────────────┐     ┌──────────────────┐
-│   Texto     │────▶│  GLiNER (ML)     │────┐
+│   Texto     │────▶│  Regex           │────┐
 └─────────────┘     └──────────────────┘    │
                                             ▼
-┌─────────────┐     ┌──────────────────┐  ┌─────────────┐
-│   Texto     │────▶│  Regex+Validação │──▶│   Merge     │──▶ Resultado
-└─────────────┘     └──────────────────┘  └─────────────┘
+┌─────────────┐     ┌──────────────────┐  ┌──────────────┐
+│   Texto     │────▶│  GLiNER (ML)     │──▶│    Merge     │──▶ Resultado
+└─────────────┘     └──────────────────┘  └──────────────┘
+                                             │
+                   ┌────────────────────┐    │ (se vazio)
+                   │ LLM (Fallback)     │◀───┘
+                   │ Score 0-1          │
+                   └────────────────────┘
 ```
 
 ---
 
-## 🔧 Configuração
+## 🔧 Configuração Avançada
 
-### Ajustando Sensibilidades
+### Ajustando Limiares de Sensibilidade
 
 ```python
 config = {
@@ -155,13 +227,13 @@ config = {
     'gliner_threshold': 0.50,        # Padrão: 0.50
 }
 
-sistema = SistemaDeteccaoIntegrado(config, usar_gliner=True)
+sistema = SistemaDeteccaoIntegrado(config)
 ```
 
-### Modo Somente Regex (Ambiente com Pouca Memória)
+### Desabilitando GLiNER (Economia de Memória)
 
 ```python
-# Desativa GLiNER para economizar ~500MB de RAM
+# Usa apenas Regex (mais leve, ~100MB RAM)
 sistema = SistemaDeteccaoIntegrado(usar_gliner=False)
 ```
 
@@ -192,12 +264,15 @@ O sistema calcula as métricas conforme especificado no edital:
 
 ---
 
-## ⚠️ Limitações
+## ⚠️ Limitações e Considerações
 
-1. **Primeira execução**: Download do modelo GLiNER (~1.2GB)
-2. **Memória**: GLiNER requer ~500MB RAM adicional
-3. **Nomes estrangeiros**: Podem não ser detectados
-4. **RG**: Formatos variam por estado
+1. **Primeira execução**: Download automático do modelo GLiNER (~1.2GB)
+2. **Requisitos de hardware**: GLiNER funciona melhor com GPU (CUDA)
+3. **Nomes estrangeiros**: Podem ter menor taxa de detecção
+4. **API Gemini (opcional)**: 
+   - Free tier tem limites baixos (15 req/min)
+   - Sistema funciona perfeitamente sem API
+   - LLM é apenas camada adicional de fallback
 
 ---
 
