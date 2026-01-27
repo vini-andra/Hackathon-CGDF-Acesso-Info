@@ -193,6 +193,8 @@ class DetectorRG(DetectorBase):
             (r'\b(\d{7,9})[\s/-]*(ssp|sds|detran|pc|iml|igp)[/\s]*([a-z]{2})\b', 0.95),
             # 7-9 dígitos com contexto
             (r'\b(\d{7,9})\b', 0.50),
+            # RG com dígitos espaçados (ex: 1 0 6 2 7 8 3 5 6)
+            (r'\b\d[\s\.]\d[\s\.]\d[\s\.]\d[\s\.]\d[\s\.]\d[\s\.]\d(?:[\s\.]\d){0,2}\b', 0.90),
         ]
         
         self.contextos_positivos = [
@@ -881,7 +883,7 @@ class DetectorContexto(DetectorBase):
             # Vulnerabilidade e Social
             (r'\b(bolsa fam[íi]lia|aux[íi]lio|benef[íi]cio|renda|vulnerabilidade|risco social)\b', 'SOCIAL', 0.75),
             (r'\b(medida protetiva|viol[êe]ncia|abuso|agress[ãa]o|boletim de ocorr[êe]ncia)\b', 'SENSIVEL', 0.90),
-            (r'\b(menor de idade|crian[çc]a|adolescente|tutelad[oa]|adotad[oa])\b', 'MENOR', 0.85),
+            (r'\b(menor de idade|crian[çc]a|adolescente|tutelad[oa])\b', 'MENOR', 0.85),
             
             # Documentos e Identificação (solicitação implícita)
             (r'\b(identidade|rg|carteira|documento|habilita[çc][ãa]o|cnh)\b', 'DOC_IMPLICITO', 0.70),
@@ -970,6 +972,67 @@ class DetectorContexto(DetectorBase):
         return resultado
 
 
+
+class DetectorPlaca(DetectorBase):
+    """
+    Detector de Placas de Veículos.
+    
+    Suporta:
+    - Padrão Nacional Antigo: AAA-0000 ou AAA 0000
+    - Padrão Mercosul: AAA0A00
+    """
+    
+    def __init__(self, sensibilidade: float = 0.85):
+        super().__init__("PLACA_VEICULO", sensibilidade)
+        # Regex unificada:
+        # (?P<placa>...) captura o grupo
+        # \b inicia e termina palavra para evitar matches parciais indesejados
+        # Padrão antigo: [A-Z]{3}[- ]?\d{4}
+        # Padrão Mercosul: [A-Z]{3}\d[A-Z]\d{2}
+        self.regex_placa = re.compile(
+            r'(?P<placa>\b[A-Z]{3}[- ]?\d{4}\b|\b[A-Z]{3}[- ]?\d[A-Z]\d{2}\b)',
+            re.IGNORECASE
+        )
+
+    def detectar(self, texto: str) -> List[DeteccaoEncontrada]:
+        if not texto:
+            return []
+            
+        deteccoes = []
+        for match in self.regex_placa.finditer(texto):
+            valor = match.group('placa')
+            
+            # Validação básica de tamanho já garantida pelo regex
+            
+            deteccoes.append(DeteccaoEncontrada(
+                tipo=self.nome_tipo,
+                valor=valor,
+                posicao_inicio=match.start(),
+                posicao_fim=match.end(),
+                confianca=1.0, # Regex exato = confiança máxima
+                metodo_deteccao="regex_placa"
+            ))
+            
+        return self._remover_duplicatas(deteccoes)
+
+    def _remover_duplicatas(self, deteccoes: List[DeteccaoEncontrada]) -> List[DeteccaoEncontrada]:
+        if not deteccoes:
+            return []
+            
+        # Remove sobreposições mantendo a mais longa (embora aqui tenham tam fixo praticamente)
+        deteccoes.sort(key=lambda x: (x.posicao_inicio, -(x.posicao_fim - x.posicao_inicio)))
+        
+        resultado = []
+        ultima_fim = -1
+        
+        for d in deteccoes:
+            if d.posicao_inicio >= ultima_fim:
+                resultado.append(d)
+                ultima_fim = d.posicao_fim
+                
+        return resultado
+
+
 class SistemaDeteccaoIntegrado:
     """
     Sistema integrado que combina todos os detectores.
@@ -997,6 +1060,7 @@ class SistemaDeteccaoIntegrado:
             'NOME': DetectorNome(config.get('nome_sensibilidade', 0.70)),
             'ENDERECO': DetectorEndereco(config.get('endereco_sensibilidade', 0.80)),
             'PROCESSO': DetectorProcesso(config.get('processo_sensibilidade', 0.70)),
+            'PLACA_VEICULO': DetectorPlaca(config.get('placa_sensibilidade', 0.85)),
             'CONTEXTO': DetectorContexto(config.get('contexto_sensibilidade', 0.65)),
         }
         

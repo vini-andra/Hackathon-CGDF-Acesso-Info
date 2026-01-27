@@ -16,6 +16,7 @@ from .detectores import (
     DetectorEmail,
     DetectorNome,
     DetectorEndereco,
+    DetectorPlaca,
     DeteccaoEncontrada
 )
 
@@ -44,6 +45,7 @@ __all__ = [
     'DetectorEmail',
     'DetectorNome',
     'DetectorEndereco',
+    'DetectorPlaca',
     'DeteccaoEncontrada',
     'CarregadorDados',
     'CarregadorDiretorio',
