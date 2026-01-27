@@ -176,6 +176,117 @@ class DetectorCPF(DetectorBase):
         return resultado
 
 
+class DetectorCNPJ(DetectorBase):
+    """
+    Detector de CNPJ (Cadastro Nacional da Pessoa Jurídica).
+    
+    Formato padrão: XX.XXX.XXX/YYYY-ZZ
+    Variações aceitas: apenas números (14 dígitos)
+    """
+    
+    def __init__(self, sensibilidade: float = 0.8):
+        super().__init__("CNPJ", sensibilidade)
+        
+        self.padroes = [
+            # Formato padrão: 12.345.678/0001-90
+            (r'\b(\d{2})[.\s]?(\d{3})[.\s]?(\d{3})[/\s]?(\d{4})[-.\s]?(\d{2})\b', 0.95),
+            # Apenas 14 dígitos
+            (r'\b(\d{14})\b', 0.75),
+        ]
+        
+        self.contextos_positivos = [
+            r'cnpj[\s:]*', r'cadastro[\s\w]*jur[íi]dic[oa]', r'inscric[ãa]o[\s\w]*estadual',
+            r'empresa[\s:]*', r'fornecedor[\s:]*', r'contratada[\s:]*', r'mf[\s:]*'
+        ]
+    
+    def detectar(self, texto: str) -> List[DeteccaoEncontrada]:
+        deteccoes = []
+        texto_lower = texto.lower()
+        
+        for padrao, confianca_base in self.padroes:
+            for match in re.finditer(padrao, texto, re.IGNORECASE):
+                valor_bruto = match.group(0)
+                digitos = re.sub(r'\D', '', valor_bruto)
+                
+                # CNPJ tem 14 dígitos
+                if len(digitos) != 14:
+                    continue
+                
+                # Ignora sequências inválidas (repetidas)
+                if len(set(digitos)) == 1:
+                    continue
+                
+                confianca = confianca_base
+                
+                # Contexto
+                pos_inicio = match.start()
+                trecho_antes = texto_lower[max(0, pos_inicio-30):pos_inicio]
+                
+                for ctx in self.contextos_positivos:
+                    if re.search(ctx, trecho_antes):
+                        confianca = min(1.0, confianca + 0.15)
+                        break
+                
+                # Validação matemática
+                if self._validar_cnpj(digitos):
+                    confianca = min(1.0, confianca + 0.15)
+                    validado = True
+                else:
+                    confianca = max(0.2, confianca - 0.30)
+                    validado = False
+                
+                if confianca >= self.sensibilidade:
+                    deteccoes.append(DeteccaoEncontrada(
+                        tipo="CNPJ",
+                        valor=valor_bruto,
+                        posicao_inicio=match.start(),
+                        posicao_fim=match.end(),
+                        confianca=round(confianca, 3),
+                        contexto=self.extrair_contexto(texto, match.start(), match.end()),
+                        validado=validado,
+                        metodo_deteccao="regex+validacao"
+                    ))
+        
+        return self._remover_duplicatas(deteccoes)
+    
+    def _validar_cnpj(self, cnpj: str) -> bool:
+        """Valida dígitos verificadores do CNPJ."""
+        if len(cnpj) != 14:
+            return False
+            
+        def calcular_digito(parte_cnpj, pesos):
+            soma = sum(int(digit) * peso for digit, peso in zip(parte_cnpj, pesos))
+            resto = soma % 11
+            return 0 if resto < 2 else 11 - resto
+            
+        # Pesos para o primeiro dígito
+        pesos1 = [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]
+        digito1 = calcular_digito(cnpj[:12], pesos1)
+        
+        if int(cnpj[12]) != digito1:
+            return False
+            
+        # Pesos para o segundo dígito
+        pesos2 = [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]
+        digito2 = calcular_digito(cnpj[:13], pesos2)
+        
+        return int(cnpj[13]) == digito2
+
+    def _remover_duplicatas(self, deteccoes: List[DeteccaoEncontrada]) -> List[DeteccaoEncontrada]:
+        if not deteccoes:
+            return []
+        deteccoes.sort(key=lambda x: (-x.confianca, x.posicao_inicio))
+        resultado = []
+        posicoes_usadas = set()
+        for d in deteccoes:
+            pos_range = range(d.posicao_inicio, d.posicao_fim)
+            if not any(p in posicoes_usadas for p in pos_range):
+                resultado.append(d)
+                posicoes_usadas.update(pos_range)
+        return resultado
+
+
+
 class DetectorRG(DetectorBase):
     """
     Detector de RG (Registro Geral).
@@ -1054,6 +1165,7 @@ class SistemaDeteccaoIntegrado:
         
         self.detectores = {
             'CPF': DetectorCPF(config.get('cpf_sensibilidade', 0.80)),
+            'CNPJ': DetectorCNPJ(config.get('cnpj_sensibilidade', 0.80)),
             'RG': DetectorRG(config.get('rg_sensibilidade', 0.75)),
             'TELEFONE': DetectorTelefone(config.get('telefone_sensibilidade', 0.75)),
             'EMAIL': DetectorEmail(config.get('email_sensibilidade', 0.85)),

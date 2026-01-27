@@ -1,0 +1,156 @@
+================================================================================
+  RELATÓRIO DE DESEMPENHO - SISTEMA DE IDENTIFICAÇÃO DE DADOS SENSÍVEIS
+================================================================================
+  Data/Hora: 2026-01-27T11:43:59.644708
+  Total de Registros Analisados: 65
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                               MATRIZ DE CONFUSÃO                             │
+├───────────────────────────────────────┬──────────────────────────────────────┤
+│                                       │          PREDIÇÃO DO MODELO          │
+│                                       ├──────────────────┬───────────────────┤
+│                                       │     POSITIVO     │      NEGATIVO     │
+├────────────────────┬──────────────────┼──────────────────┼───────────────────┤
+│        REAL        │     POSITIVO     │      VP = 36     │       FN = 0      │
+│                    ├──────────────────┼──────────────────┼───────────────────┤
+│                    │     NEGATIVO     │      FP = 0      │       VN = 29     │
+└────────────────────┴──────────────────┴──────────────────┴───────────────────┘
+
+  Legenda:
+    VP (Verdadeiro Positivo): Contém dados pessoais E foi detectado ✓
+    VN (Verdadeiro Negativo): Não contém dados E não foi detectado ✓
+    FP (Falso Positivo): Não contém dados MAS foi detectado ✗
+    FN (Falso Negativo): Contém dados MAS não foi detectado ✗
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                             MÉTRICAS DE DESEMPENHO                           │
+├──────────────────────────────────────────────────────────────────────────────┤
+│  Precisão:     100.00%  [██████████████████████████████]  IC 95%: [90.4%, 100.0%]  │
+│  Sensibilidade:100.00%  [██████████████████████████████]  IC 95%: [90.4%, 100.0%]  │
+│  F1-Score:     100.00%  [██████████████████████████████]  IC 95%: [100.0%, 100.0%]  │
+├──────────────────────────────────────────────────────────────────────────────┤
+│  Acurácia:     100.00%  [██████████████████████████████]                    │
+│  Especificidade:100.00%  [██████████████████████████████]                   │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                     FÓRMULAS UTILIZADAS (Conforme Edital)                    │
+├──────────────────────────────────────────────────────────────────────────────┤
+│  Precisão = VP / (VP + FP) = 36 / (36 + 0) = 1.0000                        │
+│  Sensibilidade = VP / (VP + FN) = 36 / (36 + 0) = 1.0000                   │
+│  F1-Score = 2 × (Precisão × Sensibilidade) / (Precisão + Sensibilidade)    │
+│           = 2 × (1.0000 × 1.0000) / (1.0000 + 1.0000) = 1.0000             │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                       DETECÇÕES POR TIPO DE DADO PESSOAL                     │
+├──────────────────────────────────────────────────────────────────────────────┤
+│  CARTAO: 3 detecção(ões)  Ex: 4408558651528, cartao de credito, cartao de credito│
+│  CNPJ: 2 detecção(ões)  Ex: 25.938.170/0001-42, 30.862.715/0001-14          │
+│  CONTEXTO: 10 detecção(ões)  Ex: vulnerabilidade, laudo, aposentadoria      │
+│  CPF: 1 detecção(ões)  Ex: 735.429.180-32                                   │
+│  DATA: 1 detecção(ões)  Ex: 09/11/1981                                      │
+│  EMAIL: 3 detecção(ões)  Ex: raquelcostela@exampl, usouza@example.org, bernardocampos@examp│
+│  ENDERECO: 10 detecção(ões)  Ex: 96323806, 04952683, 87820-517              │
+│  NOME: 19 detecção(ões)  Ex: proprietario, proprietario, Henry da Costa     │
+│  PLACA: 2 detecção(ões)  Ex: XQR-1Q78, KOW-8Q20                             │
+│  RG: 6 detecção(ões)  Ex: 6707 3955, 8324 8302, 760825142                   │
+│  TELEFONE: 7 detecção(ões)  Ex: 41) 6707 3955, +55 28 9 3961-6529, 31 4736-4807│
+└──────────────────────────────────────────────────────────────────────────────┘
+
+
+================================================================================
+  DETALHES POR REGISTRO
+================================================================================
+
+  [VP] - 36 registro(s) ✓
+  ----------------------------------------------------------------------------
+  ID: 1
+  Texto: O Departamento Estadual de Transito, em atencao a solicitacao formulada pelo proprietario do veiculo...
+  Detecções: NOME='proprietario' (conf:0.53, pos:77); PLACA_VEICULO='XQR-1Q78' (conf:1.00, pos:155); NOME='proprietario' (conf:0.58, pos:645)
+
+  ID: 3
+  Texto: Obrigado por atualizar suas informacoes de contato. O telefone (041) 6707 3955 foi salvo em seu perf...
+  Detecções: TELEFONE='41) 6707 3955' (conf:1.00, pos:65); RG='6707 3955' (conf:0.85, pos:69)
+
+  ID: 8
+  Texto: Conforme solicitacao recebida, procedemos com a atualizacao cadastral da conta pertencente a Henry d...
+  Detecções: NOME='Henry da Costa' (conf:0.95, pos:93)
+
+  ID: 10
+  Texto: O processo de selecao de fornecedores para o programa de modernizacao tecnologica foi conduzido segu...
+  Detecções: NOME='Saude Total Ltda' (conf:0.75, pos:549)
+
+  ID: 12
+  Texto: Prezado parceiro comercial, confirmamos o recebimento da documentacao da sua empresa. O CNPJ 25.938....
+  Detecções: CNPJ='25.938.170/0001-42' (conf:0.98, pos:93)
+
+  ID: 13
+  Texto: O Juizo da 2a Vara Criminal Especializada em Crimes Ciberneticos da Comarca da Capital, nos autos do...
+  Detecções: NOME='Lei Carolina Dieckmann' (conf:0.75, pos:182); NOME='Codigo Penal Brasileiro' (conf:0.70, pos:211); TELEFONE='+55 28 9 3961-6529' (conf:0.57, pos:872)
+
+  ID: 14
+  Texto: O Juizo da 2a Vara Criminal Especializada em Crimes Ciberneticos da Comarca da Capital, nos autos do...
+  Detecções: NOME='Lei Carolina Dieckmann' (conf:0.75, pos:182); NOME='Codigo Penal Brasileiro' (conf:0.70, pos:211); RG='8324 8302' (conf:0.85, pos:883)
+
+  ID: 19
+  Texto: Nossa equipe de logistica informa que a area correspondente ao codigo 96323806 esta temporariamente ...
+  Detecções: ENDERECO_CEP='96323806' (conf:0.85, pos:70)
+
+  ID: 20
+  Texto: O Comite de Seguranca da Informacao desta instituicao, em reuniao extraordinaria convocada em carate...
+  Detecções: CONTEXTO_SOCIAL='vulnerabilidade' (conf:0.75, pos:401); EMAIL='raquelcostela@example.net' (conf:0.90, pos:1153)
+
+  ID: 23
+  Texto: O Departamento de Registro Empresarial e Integracao, vinculado a Secretaria Especial de Desburocrati...
+  Detecções: CONTEXTO_SAUDE='laudo' (conf:0.85, pos:845)
+
+  ... e mais 26 registro(s)
+
+  [VN] - 29 registro(s) ✓
+  ----------------------------------------------------------------------------
+  ID: 2
+  Texto: O departamento juridico concluiu a due diligence da empresa fornecedora conforme procedimentos estab...
+  Detecções: Nenhuma
+
+  ID: 4
+  Texto: Temos o prazer de anunciar nossa nova parceria comercial com a Consultoria Alpha S.A.. Esta colabora...
+  Detecções: Nenhuma
+
+  ID: 5
+  Texto: A proposta para renovacao do contrato de servicos de gestao de projetos foi apreciada pela diretoria...
+  Detecções: Nenhuma
+
+  ID: 6
+  Texto: Durante o seminario anual de gestao empresarial promovido pela federacao das industrias, diversos ex...
+  Detecções: Nenhuma
+
+  ID: 7
+  Texto: O relatorio de performance do portfolio de produtos elaborado pelo departamento comercial apresenta ...
+  Detecções: Nenhuma
+
+  ID: 9
+  Texto: Informamos que o chamado TKT-249307 foi aberto com sucesso em nossa central de suporte. Um tecnico s...
+  Detecções: Nenhuma
+
+  ID: 11
+  Texto: Conforme registro automatico efetuado pelo sistema integrado de planejamento de recursos empresariai...
+  Detecções: Nenhuma
+
+  ID: 15
+  Texto: A concorrencia publica para contratacao de servicos de engenharia e manutencao predial recebeu propo...
+  Detecções: Nenhuma
+
+  ID: 16
+  Texto: O plano de negocios quinquenal submetido a apreciacao dos acionistas durante a assembleia geral extr...
+  Detecções: Nenhuma
+
+  ID: 17
+  Texto: O processo administrativo identificado pelo numero CHM-599439 foi encaminhado ao setor juridico para...
+  Detecções: Nenhuma
+
+  ... e mais 19 registro(s)
+
+================================================================================
+  FIM DO RELATÓRIO
+================================================================================
