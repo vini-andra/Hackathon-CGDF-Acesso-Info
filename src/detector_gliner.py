@@ -81,6 +81,13 @@ class DetectorGLiNER:
         "username": "USUARIO",
         "ip address": "IP",
         "license plate number": "PLACA_VEICULO",
+        
+        # Tipos para filtro negativo (não são PII, mas causam Falsos Positivos)
+        "organization": "ORGANIZACAO",
+        "company": "ORGANIZACAO",
+        "location": "LOCALIZACAO",
+        "city": "LOCALIZACAO",
+        "state": "LOCALIZACAO",
     }
     
     # Labels prioritários para detecção de PII brasileiro
@@ -110,6 +117,10 @@ class DetectorGLiNER:
         "medication",
         "health insurance number",
         "blood type",
+        
+        # Para filtro negativo
+        "organization",
+        "location",
     ]
     
     def __init__(self, threshold: float = 0.3, device: str = None):

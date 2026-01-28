@@ -276,6 +276,13 @@ O sistema calcula as métricas conforme especificado no edital:
 
 ---
 
+## 📄 Licenciamento
+
+Este projeto utiliza diversas bibliotecas de código aberto.
+Para detalhes sobre as licenças de terceiros, consulte o arquivo [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+---
+
 ## 👥 Autores
 
 Desenvolvido para o 1º Hackathon em Controle Social do Distrito Federal - Janeiro/2026.
@@ -283,8 +290,3 @@ Desenvolvido para o 1º Hackathon em Controle Social do Distrito Federal - Janei
 - Vinicius Armando Menezes de Andrade
 - Joao Luiz de Jesus Amaro
 
----
-
-## 📧 Contato
-
-Para dúvidas sobre o Hackathon: desafioparticipadf@cg.df.gov.br

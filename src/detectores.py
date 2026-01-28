@@ -1273,15 +1273,23 @@ class SistemaDeteccaoIntegrado:
             try:
                 deteccoes_gliner = self.detector_gliner.detectar(texto)
                 
+                filtros_negativos = []
+                
                 for dg in deteccoes_gliner:
+                    # Se for filtros negativos (Organização/Localização), guarda para processar depois
+                    if dg.tipo in ['ORGANIZACAO', 'LOCALIZACAO']:
+                        filtros_negativos.append(dg)
+                        continue
+                        
                     # Verifica se já existe detecção similar (pelo valor e posição)
                     ja_detectado = False
                     for td in todas_deteccoes:
                         # Considera duplicata se há sobreposição significativa
                         if self._deteccoes_sobrepostas(td, dg):
                             # Mantém a de maior confiança, atualiza se GLiNER for melhor
-                            if dg.confianca > td.confianca:
+                            if dg.confianca > td.confianca and td.tipo == dg.tipo:
                                 td.metodo_deteccao = f"hibrido({td.metodo_deteccao}+gliner)"
+                                td.confianca = dg.confianca
                             ja_detectado = True
                             break
                     
@@ -1298,8 +1306,28 @@ class SistemaDeteccaoIntegrado:
                             metodo_deteccao="gliner"
                         )
                         todas_deteccoes.append(nova_deteccao)
+                
+                # 2.5 Aplicar Filtros Negativos (Cross-Validation)
+                # Remove detecções de NOME que colidem com ORGANIZACAO ou LOCALIZACAO
+                deteccoes_filtradas = []
+                for td in todas_deteccoes:
+                    descartar = False
+                    if td.tipo == 'NOME': # Foca principalmente em nomes, onde ocorre o erro
+                        for filtro in filtros_negativos:
+                            if self._deteccoes_sobrepostas(td, filtro):
+                                # Se GLiNER tem alta confiança que é Org/Local, descarta o Nome
+                                if filtro.confianca > 0.4: 
+                                    descartar = True
+                                    break
+                    
+                    if not descartar:
+                        deteccoes_filtradas.append(td)
+                
+                todas_deteccoes = deteccoes_filtradas
+                
             except Exception as e:
                 # Falha silenciosa do GLiNER - regex já capturou
+                print(f"Erro no processamento GLiNER: {e}")
                 pass
         
         # 3. Detecção por LLM (APENAS SE NADA FOI ENCONTRADO - última camada)
