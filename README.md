@@ -85,6 +85,48 @@ pip install -r requirements.txt
 | `gliner>=0.2.0` | Modelo de NER para PII |
 | `torch>=2.0.0` | Backend de ML |
 
+### Instalação Alternativa com Docker
+
+Se você está enfrentando problemas com a instalação de `torch` ou `gliner`, pode usar Docker:
+
+#### Pré-requisitos
+- [Docker](https://docs.docker.com/get-docker/) instalado
+- [Docker Compose](https://docs.docker.com/compose/install/) instalado
+
+#### Build da Imagem
+```bash
+docker-compose build
+```
+
+#### Execução com CLI Interativa
+```bash
+docker-compose run --rm acesso-info python cli.py
+```
+
+#### Execução com predict.py
+```bash
+# Processar arquivo específico
+docker-compose run --rm acesso-info python predict.py dados_entrada/seu_arquivo.xlsx saida.csv
+
+# Com GLiNER (padrão)
+docker-compose run --rm acesso-info python predict.py dados_entrada/seu_arquivo.xlsx saida.csv
+
+# Especificando coluna de texto
+docker-compose run --rm acesso-info python predict.py dados_entrada/dados.xlsx saida.csv "Texto do Pedido"
+```
+
+#### Configuração do Gemini (Opcional)
+Crie um arquivo `.env` na raiz do projeto:
+```
+GEMINI_API_KEY=sua_chave_aqui
+```
+
+#### Observações
+- Os resultados são salvos em `./resultados/` no host
+- Coloque arquivos de entrada em `./dados_entrada/`
+- O modelo GLiNER (~2.3GB) será baixado no primeiro uso dentro do container
+- A instalação tradicional continua sendo o método padrão - Docker é apenas uma alternativa
+
 ---
 
 ## 📖 Como Usar

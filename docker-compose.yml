@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  acesso-info:
+    build: .
+    container_name: hackathon-cgdf-acesso-info
+    volumes:
+      - ./dados_entrada:/app/dados_entrada
+      - ./resultados:/app/resultados
+    environment:
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+    stdin_open: true
+    tty: true
